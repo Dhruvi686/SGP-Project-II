@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbConnect as dbConnect } from '@/lib/db';
-import Permit from '@/models/Permit';
+import Permit, { IPermit } from '@/lib/models/Permit'
 
 // GET /api/admin/permits - Get all permits for admin review
 export async function GET(req: NextRequest) {

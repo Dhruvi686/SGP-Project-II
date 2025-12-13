@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/utils';
-import Permit from '../../models/Permit';
+import { connectToDatabase } from '@/lib/db';
+import Permit, { IPermit } from '@/lib/models/Permit'
 
 // GET /api/permits/:touristId - Get permits for a specific tourist
 export async function GET(

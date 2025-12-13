@@ -43,3 +43,5 @@ export async function connectToDatabase(): Promise<typeof mongoose> {
 
   return cached.conn!;
 }
+
+export const dbConnect = connectToDatabase;

@@ -88,7 +88,7 @@ export default function VendorBikeDashboard() {
     e.preventDefault();
     
     try {
-      const response = await fetch(${process.env.NEXT_PUBLIC_BACKEND_URL}/api/bikes', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/bikes`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

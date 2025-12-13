@@ -121,27 +121,99 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const { data } = await api.post("/auth/login", { email, password });
-    // Expecting response like { token, user }
-    persist(data.user ?? null, data.token ?? null);
-    return data;
+    try {
+      console.log('Sending login request with:', { email, password });
+      const response = await api.post("/auth/login", { email, password });
+      console.log('Login response:', response);
+      // Expecting response like { token, user }
+      if (response.data && response.data.token) {
+        persist(response.data.user ?? null, response.data.token);
+        return response.data;
+      } else {
+        throw new Error('Invalid response format from server');
+      }
+    } catch (error: unknown) {
+      // Handle different types of errors
+      const errorObj = error as {
+        message?: string;
+        response?: {
+          data?: any;
+          status?: number;
+        };
+        config?: {
+          url?: string;
+          method?: string;
+          data?: any;
+        };
+      };
+
+      const errorDetails = {
+        message: errorObj?.message || 'Unknown error',
+        response: {
+          data: errorObj?.response?.data,
+          status: errorObj?.response?.status
+        },
+        config: {
+          url: errorObj?.config?.url,
+          method: errorObj?.config?.method,
+          data: errorObj?.config?.data
+        }
+      };
+
+      console.error('Login error details:', JSON.stringify(errorDetails, null, 2));
+      
+      // Create a new error with the details
+      const enhancedError = new Error(errorDetails.message) as any;
+      enhancedError.details = errorDetails;
+      throw enhancedError;
+    }
   }, [persist]);
 
   const register = useCallback(async (
     name: string,
     email: string,
     password: string,
-    role?: string,
+    role: string = 'Tourist',
     details?: { businessName?: string; contactNumber?: string; address?: string }
   ) => {
-    const payload: any = { name, email, password, role };
-    if (details) Object.assign(payload, details);
-    const { data } = await api.post("/auth/register", payload);
-    // If API returns token+user on register, persist it. Otherwise require login.
-    if (data?.token) {
-      persist(data.user ?? null, data.token);
+    try {
+      const payload: any = { 
+        name, 
+        email, 
+        password, 
+        role,
+        ...(details || {}) 
+      };
+      
+      console.log('Sending registration payload:', JSON.stringify(payload, null, 2));
+      
+      // Direct registration without OTP
+      const response = await api.post("/auth/register", payload);
+      const data = response.data;
+      
+      console.log('Registration response:', data);
+      
+      // If registration is successful and we get a token, persist it
+      if (data?.token) {
+        persist(data.user ?? null, data.token);
+      }
+      
+      return data;
+    } catch (error: any) {
+      console.error('Registration error:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          data: error.config?.data
+        }
+      });
+      
+      // Rethrow the error to be handled by the component
+      throw error;
     }
-    return data;
   }, [persist]);
 
   const logout = useCallback(() => {

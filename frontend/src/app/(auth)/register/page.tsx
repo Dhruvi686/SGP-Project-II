@@ -1,19 +1,31 @@
 "use client";
 
-import { useRegisterUserMutation } from "@/lib/rtkApi";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { useAuth } from "@/lib/Authcontextapi";
+
+// Define the API error type
+type ApiError = {
+  status?: number;
+  data?: {
+    message?: string;
+  };
+  error?: {
+    message?: string;
+  };
+  message?: string;
+};
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [registerApi] = useRegisterUserMutation();
-
+  const { register } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
   const [popup, setPopup] = useState({ show: false, message: "", type: "" });
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    phone: "",
+    contactNumber: "",
     password: "",
     businessName: "",
     address: ""
@@ -31,58 +43,73 @@ export default function RegisterPage() {
 
   const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setIsLoading(true);
 
-    // Basic validation
-    if (!formData.name || !formData.email || !formData.password) {
-      return showPopup("All fields are required.", "error");
+    // Validation
+    if (!formData.name) {
+      setIsLoading(false);
+      return showPopup("Please enter your name.", "error");
+    }
+    
+    if (!formData.email) {
+      setIsLoading(false);
+      return showPopup("Please enter your email.", "error");
+    }
+    
+    if (!formData.password) {
+      setIsLoading(false);
+      return showPopup("Please enter a password.", "error");
     }
 
-    const gmailRegex = /^[^@\s]+@gmail\.com$/;
-    if (!gmailRegex.test(formData.email)) {
-      return showPopup("Please enter a valid Gmail address (ending with @gmail.com).", "error");
-    }
-
-    if (selectedAccountType === "Vendor") {
-      const phoneRegex = /^\d{10}$/;
-      if (!formData.phone || !phoneRegex.test(formData.phone)) {
-        return showPopup("Please enter a valid 10-digit contact number.", "error");
-      }
-      if (!formData.businessName || !formData.address) {
-        return showPopup("Business name and address are required for Vendor.", "error");
-      }
+    if (selectedAccountType === "Vendor" && (!formData.businessName || !formData.address)) {
+      setIsLoading(false);
+      return showPopup("Business name and address are required for vendors.", "error");
     }
 
     try {
-      const payload: any = {
+      console.log('Starting registration process...');
+      console.log('Registering user with data:', {
         name: formData.name,
         email: formData.email,
         password: formData.password,
-        role: selectedAccountType
-      };
-
-      if (selectedAccountType === "Vendor") {
-        payload.businessName = formData.businessName;
-        payload.contactNumber = formData.phone;
-        payload.address = formData.address;
-      }
-
-      await registerApi(payload).unwrap();
-      showPopup("Registration successful!", "success");
-
-      // Redirect to role-specific login page after 2s
+        role: selectedAccountType,
+        ...(selectedAccountType === "Vendor" && {
+          businessName: formData.businessName,
+          contactNumber: formData.contactNumber,
+          address: formData.address
+        })
+      });
+      
+      const response = await register(
+        formData.name,
+        formData.email,
+        formData.password,
+        selectedAccountType,
+        selectedAccountType === "Vendor" ? {
+          businessName: formData.businessName,
+          contactNumber: formData.contactNumber,
+          address: formData.address
+        } : undefined
+      );
+      console.log('Registration successful:', response);
+      
+      showPopup("Registration successful! Redirecting to login...", "success");
+      
+      // Redirect to login after 2 seconds
       setTimeout(() => {
-        const rolePath = selectedAccountType.toLowerCase();
-        router.push(`/login/${rolePath}`);
+        router.push(`/login/${selectedAccountType.toLowerCase()}`);
       }, 2000);
-    } catch (err: any) {
-  console.error("Register error:", err);
-  setPopup({
-    show: true,
-    message: err?.data?.message || err?.error || "Registration failed. Try again.",
-    type: "error",
-  });
-  setTimeout(() => setPopup({ show: false, message: "", type: "" }), 3000);
-  }
+    } catch (error: unknown) {
+      console.error('Registration error:', error);
+      const apiError = error as ApiError;
+      const errorMessage = apiError?.data?.message || 
+                         apiError?.error?.message || 
+                         apiError?.message || 
+                         'Registration failed. Please try again.';
+      showPopup(errorMessage, 'error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const showPopup = (message: string, type: string) => {
@@ -90,12 +117,119 @@ export default function RegisterPage() {
     setTimeout(() => setPopup({ show: false, message: "", type: "" }), 3000);
   };
 
+  // Render the registration form
+  const renderForm = () => {
+    return (
+      <form onSubmit={handleRegister} className="space-y-4">
+        {/* Name */}
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1">
+            Full Name
+          </label>
+          <input
+            type="text"
+            placeholder="John Doe"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            className="w-full h-10 outline-none border-2 border-gray-300 rounded-lg px-3"
+          />
+        </div>
+
+        {/* Email */}
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1">
+            Email
+          </label>
+          <input
+            type="email"
+            placeholder="example@gmail.com"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            className="w-full h-10 outline-none border-2 border-gray-300 rounded-lg px-3"
+          />
+        </div>
+
+        {/* Password */}
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1">
+            Password
+          </label>
+          <input
+            type="password"
+            placeholder="Password"
+            value={formData.password}
+            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+            className="w-full h-10 outline-none border-2 border-gray-300 rounded-lg px-3"
+          />
+        </div>
+
+        {/* Vendor Fields */}
+        {selectedAccountType === "Vendor" && (
+          <>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Business Name
+              </label>
+              <input
+                type="text"
+                placeholder="My Travel Co."
+                value={formData.businessName}
+                onChange={(e) =>
+                  setFormData({ ...formData, businessName: e.target.value })
+                }
+                className="w-full h-10 outline-none border-2 border-gray-300 rounded-lg px-3"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Contact Number
+              </label>
+              <input
+                type="tel"
+                placeholder="9999999999"
+                value={formData.contactNumber}
+                onChange={(e) => setFormData({ ...formData, contactNumber: e.target.value })}
+                className="w-full h-10 outline-none border-2 border-gray-300 rounded-lg px-3"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Address
+              </label>
+              <input
+                type="text"
+                placeholder="Street, City, State"
+                value={formData.address}
+                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                className="w-full h-10 outline-none border-2 border-gray-300 rounded-lg px-3"
+              />
+            </div>
+          </>
+        )}
+
+        {/* Submit */}
+        <button
+          type="submit"
+          disabled={isLoading}
+          className={`w-full bg-blue-700 text-white py-2 rounded-lg font-semibold hover:bg-blue-800 transition-colors ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+        >
+          {isLoading ? 'Registering...' : 'Register'}
+        </button>
+
+        <p className="text-center text-base mt-4">
+          Already have an account?{" "}
+          <Link href="/login" className="font-semibold hover:underline text-blue-700 cursor-pointer">
+            Login
+          </Link>
+        </p>
+      </form>
+    );
+  };
+
   return (
-    <div
-      className="min-h-screen flex items-center justify-center bg-cover bg-center relative"
-      style={{ backgroundImage: "url('/ladakh-hero.jpeg')" }}
-    >
-      {/* Blurred background overlay */}
+    <div className="min-h-screen flex items-center justify-center bg-cover bg-center relative" style={{ backgroundImage: "url('/ladakh-hero.jpeg')" }}>
       <div className="absolute inset-0 backdrop-blur-[2px] bg-black/20"></div>
 
       <div className="bg-white bg-opacity-90 rounded-xl shadow-lg flex w-full max-w-5xl overflow-hidden relative z-10 mt-[1in]">
@@ -153,110 +287,7 @@ export default function RegisterPage() {
                 <p className="text-yellow-700 text-sm">Please choose another account type for now.</p>
               </div>
             ) : (
-              <form onSubmit={handleRegister} className="space-y-4">
-                {/* Full Name */}
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Full Name
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="John Doe"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full h-10 outline-none border-2 border-gray-300 rounded-lg px-3"
-                  />
-                </div>
-
-                {/* Vendor Fields */}
-                {selectedAccountType === "Vendor" && (
-                  <>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-700 mb-1">
-                        Business Name
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="My Travel Co."
-                        value={formData.businessName}
-                        onChange={(e) =>
-                          setFormData({ ...formData, businessName: e.target.value })
-                        }
-                        className="w-full h-10 outline-none border-2 border-gray-300 rounded-lg px-3"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-700 mb-1">
-                        Contact Number
-                      </label>
-                      <input
-                        type="tel"
-                        placeholder="9999999999"
-                        value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        className="w-full h-10 outline-none border-2 border-gray-300 rounded-lg px-3"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-700 mb-1">
-                        Address
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Street, City, State"
-                        value={formData.address}
-                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                        className="w-full h-10 outline-none border-2 border-gray-300 rounded-lg px-3"
-                      />
-                    </div>
-                  </>
-                )}
-
-                {/* Email */}
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    placeholder="example@gmail.com"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full h-10 outline-none border-2 border-gray-300 rounded-lg px-3"
-                  />
-                </div>
-
-                {/* Password */}
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Password
-                  </label>
-                  <input
-                    type="password"
-                    placeholder="Password"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="w-full h-10 outline-none border-2 border-gray-300 rounded-lg px-3"
-                  />
-                </div>
-
-                {/* Submit */}
-                <button
-                  type="submit"
-                  className="w-full h-11 bg-blue-900 text-white text-base font-semibold rounded-lg hover:bg-blue-800 transition-colors shadow-md mt-2 cursor-pointer"
-                >
-                  SIGN UP
-                </button>
-
-                <p className="text-center text-base mt-4">
-                  Already have an account?{" "}
-                  <Link href="/login" className="font-semibold hover:underline text-blue-700 cursor-pointer">
-                    Login
-                  </Link>
-                </p>
-              </form>
+              renderForm()
             )}
           </div>
         </div>

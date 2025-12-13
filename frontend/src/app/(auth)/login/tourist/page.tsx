@@ -34,21 +34,36 @@ export default function TouristLogin() {
   }, [dropdownOpen]);
 
   const mutation = useMutation({
-    mutationFn: ({ email, password }: { email: string; password: string }) => login(email, password),
-    onSuccess: async (data) => {
-      await signIn("credentials", {
-        redirect: false,
-        email: formData.email,
-        password: formData.password,
-      });
+    mutationFn: ({ email, password }: { email: string; password: string }) => 
+      login(email, password),
+    onSuccess: (data) => {
+      console.log('Login successful, user data:', data);
       alert("Tourist Login successful!");
       router.push("/dashboard");
     },
     onError: (error: any) => {
-      console.log(error);
-
+      console.error("Login mutation error:", error);
       
-      alert(error.response?.data?.message || "Tourist Login failed");
+      // Extract the most relevant error message
+      let errorMessage = 'Login failed. Please check your credentials and try again.';
+      
+      if (error.details) {
+        // Use the enhanced error details if available
+        const details = error.details;
+        console.error('Error details:', details);
+        
+        if (details.response?.status === 401) {
+          errorMessage = 'Invalid email or password. Please try again.';
+        } else if (details.response?.data?.message) {
+          errorMessage = details.response.data.message;
+        } else if (details.message) {
+          errorMessage = details.message;
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      alert(errorMessage);
     },
   });
 

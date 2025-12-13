@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
-import Permit from '../models/Permit';
+import Permit, { IPermit } from '@/lib/models/Permit'
 
 // POST /api/permits - Submit a new permit application
 export async function POST(req: NextRequest) {

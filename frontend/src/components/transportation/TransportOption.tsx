@@ -1,58 +1,42 @@
-import {
-  FaCarSide,
-  FaMotorcycle,
-  FaShuttleVan,
-  FaTruckMoving,
-} from "react-icons/fa";
-import CategoryCard from "../localGuides/CategoryCard";
+import React from 'react';
+import { Car, Bus, Bike, Plane } from 'lucide-react';
+import CategoryCard from '../localGuides/CategoryCard';
 
-const options = [
+const transportOptions = [
   {
-    title: "Cars & SUVs",
-    description: "Comfortable vehicles for all terrains",
-    count: "120+ Vehicles",
-    icon: <FaCarSide />,
-    color: "bg-blue-600",
+    title: 'Private Taxis',
+    description: 'Comfortable private taxis for personalized travel',
+    icon: <Car className="w-8 h-8 text-blue-600" />,
   },
   {
-    title: "Motorcycles",
-    description: "Adventure bikes for thrill-seekers",
-    count: "80+ Bikes",
-    icon: <FaMotorcycle />,
-    color: "bg-green-500",
+    title: 'Shared Taxis',
+    description: 'Affordable shared taxis to popular destinations',
+    icon: <Bus className="w-8 h-8 text-green-600" />,
   },
   {
-    title: "Tempo Travellers",
-    description: "Group travel with spacious seating",
-    count: "50+ Vehicles",
-    icon: <FaShuttleVan />,
-    color: "bg-purple-600",
+    title: 'Bike Rentals',
+    description: 'Explore Ladakh on two wheels with bike rentals',
+    icon: <Bike className="w-8 h-8 text-red-600" />,
   },
   {
-    title: "Specialized Vehicles",
-    description: "For remote and challenging terrains",
-    count: "30+ Vehicles",
-    icon: <FaTruckMoving />,
-    color: "bg-orange-700",
+    title: 'Airport Transfers',
+    description: 'Reliable airport pickup and drop services',
+    icon: <Plane className="w-8 h-8 text-purple-600" />,
   },
 ];
 
-const TransportOptions = () => (
-  <section className="py-12 bg-white text-center">
-    <h2 className="text-2xl font-bold mb-8">Transport Option</h2>
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-      {options.map((o) => (
+export default function TransportOptions() {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {transportOptions.map((option, index) => (
         <CategoryCard
-          key={o.title}
-          title={o.title}
-          description={o.description}
-          icon={o.icon}
-          color={o.color}
-          buttonLabel={o.count}
+          key={index}
+          title={option.title}
+          description={option.description}
+          icon={option.icon}
+          onClick={() => console.log(`Selected ${option.title}`)}
         />
       ))}
     </div>
-  </section>
-);
-
-export default TransportOptions;
+  );
+}

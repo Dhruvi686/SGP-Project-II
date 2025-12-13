@@ -26,13 +26,16 @@ export default function Navbar() {
               <Link href="/tours">Tours</Link>
             </Button>
             <Button variant="ghost" asChild>
-              <Link href="/plan-trip">Plan Trip</Link>
+              <Link href="/tripplanner">Trip Plan </Link>
             </Button>
             <Button variant="ghost" asChild>
               <Link href="/bookings">My Bookings</Link>
             </Button>
             <Button variant="ghost" asChild>
               <Link href="/permits">Permits</Link>
+            </Button>
+            <Button variant="ghost" asChild>
+              <Link href="/emergency">Emergency</Link>
             </Button>
             {session ? (
               <div className="flex items-center space-x-2">
@@ -86,12 +89,12 @@ export default function Navbar() {
                           <span className="text-sm text-gray-900">Culture</span>
                         </Link>
                         <Link
-                          href="/hotels"
+                          href="/Accomodation"
                           className="flex items-center space-x-3 px-4 py-2 hover:bg-gray-50 transition-colors"
                           onClick={() => setShowUserDropdown(false)}
                         >
                           <UserCircleIcon className="h-4 w-4 text-gray-600" />
-                          <span className="text-sm text-gray-900">Hotel Recommendation</span>
+                          <span className="text-sm text-gray-900">Accomodation</span>
                         </Link>
                         <Link
                           href="/transport"
@@ -102,7 +105,7 @@ export default function Navbar() {
                           <span className="text-sm text-gray-900">Transport</span>
                         </Link>
                         <Link
-                          href="/blog"
+                          href="/tours"
                           className="flex items-center space-x-3 px-4 py-2 hover:bg-gray-50 transition-colors"
                           onClick={() => setShowUserDropdown(false)}
                         >

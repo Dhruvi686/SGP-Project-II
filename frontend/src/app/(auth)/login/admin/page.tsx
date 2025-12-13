@@ -1,7 +1,5 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
-import { useAuth } from "@/lib/Authcontextapi";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -10,7 +8,6 @@ import { useState, useEffect } from "react";
 export default function AdminLogin() {
   const router = useRouter();
   const [formData, setFormData] = useState({ email: "", password: "" });
-  const { login } = useAuth();
 
   useEffect(() => {
     const footer = document.querySelector('footer');
@@ -18,24 +15,18 @@ export default function AdminLogin() {
     return () => { if (footer) footer.style.display = ''; };
   }, []);
 
-  const mutation = useMutation({
-    mutationFn: ({ email, password }: { email: string; password: string }) => login(email, password),
-    onSuccess: async () => {
-      await signIn("credentials", {
-        redirect: false,
-        email: formData.email,
-        password: formData.password,
-      });
+  const handleLogin = async () => {
+    const result = await signIn("credentials", {
+      redirect: false,
+      email: formData.email,
+      password: formData.password,
+    });
+    if (result?.ok) {
       alert("Admin Login successful!");
       router.push("/dashboard");
-    },
-    onError: (error: any) => {
-      alert(error?.response?.data?.message || "Admin Login failed");
-    },
-  });
-
-  const handleLogin = () => {
-    mutation.mutate(formData);
+    } else {
+      alert("Admin Login failed");
+    }
   };
 
   return (
@@ -109,7 +100,7 @@ export default function AdminLogin() {
               LOGIN
             </button>
             <p className="text-center text-base mt-6">
-              Don't have an account? <Link href="/register" className="font-semibold hover:underline cursor-pointer" style={{ color: '#FF9900' }}>Register Now</Link>
+              Don&apos;t have an account? <Link href="/register" className="font-semibold hover:underline cursor-pointer" style={{ color: '#FF9900' }}>Register Now</Link>
             </p>
           </form>
         </div>
