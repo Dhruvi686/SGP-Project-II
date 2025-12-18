@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import jsPDF from 'jspdf';
+import QRCode from 'qrcode';
 
 export default function PermitsPage() {
   const [activeTab, setActiveTab] = useState('permit-types');
@@ -19,6 +21,14 @@ export default function PermitsPage() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [applicationId, setApplicationId] = useState('');
+  const [permitNumber, setPermitNumber] = useState('');
+  const [qrCodeDataURL, setQrCodeDataURL] = useState('');
+  const [paymentCompleted, setPaymentCompleted] = useState(false);
+  const [checkStatusData, setCheckStatusData] = useState({
+    applicationId: ''
+  });
+  const [statusResult, setStatusResult] = useState<any>(null);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
 
   const permitTypes = [
     {
@@ -112,26 +122,311 @@ export default function PermitsPage() {
     e.preventDefault();
     setIsSubmitting(true);
     
-    // Simulate form submission
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Generate application ID
-    const newApplicationId = `${selectedPermit?.title.split(' ')[0]}-${Math.floor(Math.random() * 90000) + 10000}`;
-    setApplicationId(newApplicationId);
-    
-    // Switch to confirmation view
-    setCurrentView('confirmation');
-    setIsSubmitting(false);
+    try {
+      // Validate form data
+      if (!formData.fullName || !formData.email || !formData.phone || !formData.travelDate || !formData.returnDate) {
+        throw new Error('Please fill in all required fields');
+      }
+
+      if (!selectedPermit) {
+        throw new Error('No permit type selected');
+      }
+      
+      // Generate application ID and permit number
+      const newApplicationId = `${selectedPermit.title.split(' ')[0]}-${Math.floor(Math.random() * 90000) + 10000}`;
+      setApplicationId(newApplicationId);
+      
+      const permitPrefix = selectedPermit.title.split(' ')[0].toUpperCase();
+      const newPermitNumber = `LAK/${permitPrefix}/${new Date().getFullYear()}/${newApplicationId.split('-')[1]}`;
+      setPermitNumber(newPermitNumber);
+      
+      // Extract fee amount (remove ₹ and "per person")
+      const feeAmount = parseInt(selectedPermit.fee.replace(/[^0-9]/g, ''));
+      
+      if (isNaN(feeAmount) || feeAmount <= 0) {
+        throw new Error('Invalid permit fee');
+      }
+      
+      // 1. SAVE PERMIT APPLICATION TO DATABASE
+      const permitPayload = {
+        fullName: formData.fullName.trim(),
+        email: formData.email.trim(),
+        phone: formData.phone.trim(),
+        permitType: selectedPermit.title,
+        travelDate: formData.travelDate,
+        returnDate: formData.returnDate,
+        itinerary: formData.itinerary?.trim() || '',
+        amount: feeAmount,
+        applicationId: newApplicationId,
+        permitNumber: newPermitNumber
+      };
+      
+      console.log('📤 SENDING PERMIT PAYLOAD TO:', `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/permits`);
+      console.log('📦 Payload:', JSON.stringify(permitPayload, null, 2));
+      console.log('🔍 Checking each field:');
+      Object.entries(permitPayload).forEach(([key, value]) => {
+        console.log(`  ${key}: ${value} (${typeof value}) - ${value ? '✅' : '❌ MISSING'}`);
+      });
+      
+      const permitRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/permits`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(permitPayload)
+      });
+      
+      console.log('📡 Response status:', permitRes.status, permitRes.statusText);
+      
+      if (!permitRes.ok) {
+        const responseText = await permitRes.text();
+        console.error('❌ Backend response (text):', responseText);
+        
+        let error;
+        try {
+          error = JSON.parse(responseText);
+        } catch (e) {
+          throw new Error(`Server error (${permitRes.status}): ${responseText || 'Unknown error'}`);
+        }
+        
+        console.error('❌ Backend error (parsed):', error);
+        throw new Error(error.error || error.message || 'Failed to create permit application');
+      }
+      
+      const { permit } = await permitRes.json();
+      console.log('✅ Permit saved to database:', permit);
+      
+      // 2. CREATE STRIPE PAYMENT SESSION
+      const paymentRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/payments/create-checkout-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          bookingId: newApplicationId, 
+          amount: feeAmount, 
+          name: formData.fullName,
+          type: 'permit'
+        })
+      });
+      
+      if (!paymentRes.ok) {
+        throw new Error('Failed to initiate payment');
+      }
+      
+      const { url } = await paymentRes.json();
+      
+      // 3. STORE DATA IN SESSION STORAGE
+      sessionStorage.setItem('permitApplication', JSON.stringify({
+        formData,
+        selectedPermit,
+        applicationId: newApplicationId,
+        permitNumber: newPermitNumber
+      }));
+      
+      // 4. REDIRECT TO STRIPE CHECKOUT
+      if (url) {
+        window.location.href = url;
+      } else {
+        throw new Error('Payment URL not received');
+      }
+    } catch (error: any) {
+      console.error('Application error:', error);
+      alert(error.message || 'Failed to submit application. Please try again.');
+      setIsSubmitting(false);
+    }
   };
 
   const handleDownloadPDF = () => {
-    const element = document.createElement('a');
-    const file = new Blob(['PDF content would be here'], { type: 'application/pdf' });
-    element.href = URL.createObjectURL(file);
-    element.download = `${selectedPermit?.title}-Application-${applicationId}.pdf`;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    
+    // ============ HEADER SECTION ============
+    // Top header band (government style)
+    doc.setFillColor(25, 47, 89); // Dark blue government color
+    doc.rect(0, 0, pageWidth, 35, 'F');
+    
+    // Government emblem/logo placeholder (left side)
+    doc.setDrawColor(255, 255, 255);
+    doc.setLineWidth(1);
+    doc.circle(25, 17.5, 10, 'S'); // Placeholder circle for emblem
+    doc.setFontSize(8);
+    doc.setTextColor(255, 255, 255);
+    doc.text('EMBLEM', 25, 19, { align: 'center' });
+    
+    // Header text (center)
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text('GOVERNMENT OF LADAKH', pageWidth / 2, 12, { align: 'center' });
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Department of Tourism', pageWidth / 2, 18, { align: 'center' });
+    doc.setFontSize(8);
+    doc.text('Union Territory of Ladakh, India', pageWidth / 2, 24, { align: 'center' });
+    
+    // Reset colors
+    doc.setTextColor(0, 0, 0);
+    
+    // ============ DOCUMENT TITLE ============
+    doc.setFontSize(18);
+    doc.setFont('times', 'bold');
+    const permitTitle = selectedPermit?.title.toUpperCase() || 'PERMIT';
+    doc.text(permitTitle, pageWidth / 2, 48, { align: 'center' });
+    
+    // Permit number and issue date
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    const permitPrefix = selectedPermit?.title.split(' ')[0].toUpperCase() || 'LAK';
+    const permitNumber = `LAK/${permitPrefix}/${new Date().getFullYear()}/${applicationId.split('-')[1] || '000000'}`;
+    doc.text(`Permit No: ${permitNumber}`, 20, 58);
+    doc.text(`Issue Date: ${new Date().toLocaleDateString('en-GB')}`, pageWidth - 70, 58);
+    
+    // Horizontal line separator
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.5);
+    doc.line(20, 62, pageWidth - 20, 62);
+    
+    // ============ APPLICANT DETAILS (TABLE FORMAT) ============
+    let yPos = 72;
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('APPLICANT DETAILS', 20, yPos);
+    yPos += 8;
+    
+    // Draw table borders
+    doc.setDrawColor(100, 100, 100);
+    doc.setLineWidth(0.3);
+    const tableX = 20;
+    const tableWidth = pageWidth - 40;
+    const colWidth = tableWidth / 2;
+    
+    // Function to draw a table row
+    const drawRow = (label: string, value: string, y: number) => {
+      // Outer border
+      doc.rect(tableX, y, tableWidth, 10);
+      // Vertical divider
+      doc.line(tableX + colWidth, y, tableX + colWidth, y + 10);
+      
+      // Label
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text(label, tableX + 3, y + 6.5);
+      
+      // Value
+      doc.setFont('helvetica', 'normal');
+      doc.text(value, tableX + colWidth + 3, y + 6.5);
+      
+      return y + 10;
+    };
+    
+    yPos = drawRow('Full Name', formData.fullName || 'N/A', yPos);
+    yPos = drawRow('Email Address', formData.email || 'N/A', yPos);
+    yPos = drawRow('Phone Number', formData.phone || 'N/A', yPos);
+    yPos = drawRow('Travel Start Date', formData.travelDate || 'N/A', yPos);
+    yPos = drawRow('Travel End Date', formData.returnDate || 'N/A', yPos);
+    yPos = drawRow('Application ID', applicationId || 'N/A', yPos);
+    
+    // Add itinerary if provided
+    if (formData.itinerary) {
+      yPos += 5;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Travel Itinerary:', 20, yPos);
+      yPos += 5;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      const splitItinerary = doc.splitTextToSize(formData.itinerary, tableWidth - 6);
+      doc.text(splitItinerary, 23, yPos);
+      yPos += splitItinerary.length * 5 + 5;
+    } else {
+      yPos += 10;
+    }
+    
+    // ============ VALIDITY & STATUS ============
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PERMIT STATUS', 20, yPos);
+    yPos += 8;
+    
+    doc.setFillColor(255, 243, 205); // Light yellow background
+    doc.rect(20, yPos, tableWidth, 15, 'F');
+    doc.setDrawColor(200, 150, 0);
+    doc.rect(20, yPos, tableWidth, 15, 'S');
+    
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(200, 100, 0);
+    doc.text('Status: PENDING APPROVAL', pageWidth / 2, yPos + 6, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(`Processing Time: ${selectedPermit?.processingTime} | You will be notified via email`, pageWidth / 2, yPos + 11, { align: 'center' });
+    
+    doc.setTextColor(0, 0, 0);
+    yPos += 25;
+    
+    // ============ QR CODE PLACEHOLDER ============
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Verification QR Code', 20, yPos);
+    yPos += 5;
+    
+    // QR code placeholder
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.5);
+    doc.rect(20, yPos, 30, 30, 'S');
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'italic');
+    doc.text('QR Code', 35, yPos + 16, { align: 'center' });
+    
+    // Instructions next to QR
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text('Scan this QR code to verify the authenticity of this permit.', 55, yPos + 8);
+    doc.text(`Verification URL: https://ladakh.gov.in/verify/${permitNumber}`, 55, yPos + 14);
+    doc.text('This permit is valid only when approved by the issuing authority.', 55, yPos + 20);
+    
+    yPos += 40;
+    
+    // ============ SIGNATURE SECTION ============
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ISSUING AUTHORITY', 20, yPos);
+    yPos += 8;
+    
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.3);
+    doc.rect(20, yPos, 80, 30, 'S');
+    
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(9);
+    doc.text('[Signature will appear here upon approval]', 60, yPos + 12, { align: 'center' });
+    doc.line(30, yPos + 20, 90, yPos + 20); // Signature line
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text('Authorized Signatory', 60, yPos + 25, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text('Department of Tourism, Ladakh', 60, yPos + 29, { align: 'center' });
+    
+    // ============ FOOTER ============
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(100, 100, 100);
+    doc.text('This is a system-generated document. For queries, contact: tourism@ladakh.gov.in | +91-1982-252094', pageWidth / 2, pageHeight - 15, { align: 'center' });
+    doc.text('Keep this document with you during your travel in restricted areas.', pageWidth / 2, pageHeight - 10, { align: 'center' });
+    
+    // Watermark
+    doc.setFontSize(60);
+    doc.setTextColor(240, 240, 240);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PENDING', pageWidth / 2, pageHeight / 2, { align: 'center', angle: 45 });
+    
+    // Border around entire page
+    doc.setDrawColor(25, 47, 89);
+    doc.setLineWidth(1);
+    doc.rect(10, 10, pageWidth - 20, pageHeight - 20, 'S');
+    
+    // Save the PDF
+    doc.save(`${selectedPermit?.title}-Permit-${permitNumber}.pdf`);
   };
 
   const handleReturnToMain = () => {
@@ -152,6 +447,83 @@ export default function PermitsPage() {
       idProof: null,
       passportPhoto: null
     });
+  };
+
+  const handleCheckStatusChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setCheckStatusData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleCheckStatus = async () => {
+    const appId = checkStatusData.applicationId?.trim();
+
+    if (!appId) {
+      alert('Please enter Application ID');
+      return;
+    }
+
+    setIsCheckingStatus(true);
+    setStatusResult(null);
+
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/permits/application/${encodeURIComponent(appId)}`
+      );
+
+      if (res.status === 404) {
+        setStatusResult({
+          notFound: true,
+          message: 'Application ID not found. Please check the ID and try again.'
+        });
+        return;
+      }
+
+      if (!res.ok) {
+        const txt = await res.text();
+        let msg = txt;
+        try {
+          const parsed = JSON.parse(txt);
+          msg = parsed?.error || parsed?.message || txt;
+        } catch {
+          // ignore
+        }
+        throw new Error(msg || 'Failed to check status');
+      }
+
+      const data = await res.json();
+      const permit = data?.permit;
+
+      const status: string = permit?.status || 'Unknown';
+      const statusMessage =
+        status === 'Approved'
+          ? 'Your permit is approved.'
+          : status === 'Rejected'
+            ? 'Your application was rejected.'
+            : status === 'Under Review'
+              ? 'Your application is under review by the authorities.'
+              : status === 'Payment Pending'
+                ? 'Payment is pending for this application.'
+                : 'Your application is being processed.';
+
+      // try to show submitted date from db
+      const submitted = permit?.submittedAt || permit?.createdAt;
+
+      setStatusResult({
+        status,
+        message: statusMessage,
+        submittedDate: submitted ? new Date(submitted).toLocaleDateString() : '-'
+      });
+    } catch (err: any) {
+      setStatusResult({
+        error: true,
+        message: err?.message || 'Failed to check status'
+      });
+    } finally {
+      setIsCheckingStatus(false);
+    }
   };
 
   const faqs = [
@@ -756,21 +1128,56 @@ export default function PermitsPage() {
                 <label className="block text-gray-700 mb-2">Application ID</label>
                 <input 
                   type="text" 
+                  name="applicationId"
+                  value={checkStatusData.applicationId}
+                  onChange={handleCheckStatusChange}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500" 
                   placeholder="Enter your application ID"
                 />
               </div>
-              <div className="mb-6">
-                <label className="block text-gray-700 mb-2">Email Address</label>
-                <input 
-                  type="email" 
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500" 
-                  placeholder="Enter your email address"
-                />
-              </div>
-              <button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors duration-200">
-                Check Status
+              <button 
+                onClick={handleCheckStatus}
+                disabled={isCheckingStatus}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-2 px-4 rounded-lg font-medium transition-colors duration-200 flex justify-center items-center"
+              >
+                {isCheckingStatus ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Checking...
+                  </>
+                ) : (
+                  'Check Status'
+                )}
               </button>
+
+              {/* Status Result */}
+              {statusResult && (
+                <div className="mt-8 bg-gray-50 rounded-lg p-6 border border-gray-200">
+                  {statusResult.notFound || statusResult.error ? (
+                    <p className={`font-medium ${statusResult.error ? 'text-red-600' : 'text-gray-700'}`}>
+                      {statusResult.message}
+                    </p>
+                  ) : (
+                    <>
+                      <div className="flex items-center mb-4">
+                        <div className={`w-3 h-3 rounded-full mr-2 ${
+                          statusResult.status === 'Approved' ? 'bg-green-500' :
+                          statusResult.status === 'Rejected' ? 'bg-red-500' : 'bg-yellow-500'
+                        }`}></div>
+                        <h3 className="text-lg font-semibold text-gray-800">Status: {statusResult.status}</h3>
+                      </div>
+                      <p className="text-gray-600 mb-4">{statusResult.message}</p>
+                      <div className="text-sm">
+                        <span className="text-gray-500 block">Submitted On</span>
+                        <span className="font-medium text-gray-800">{statusResult.submittedDate}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}

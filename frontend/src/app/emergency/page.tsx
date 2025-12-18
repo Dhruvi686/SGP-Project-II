@@ -38,6 +38,11 @@ const EmergencyPage = () => {
     },
   ];
 
+  const handleViewOnMap = (location: string) => {
+    const query = encodeURIComponent(location + ", Ladakh");
+    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+  };
+
   return (
     <main className="bg-white min-h-screen">
       {/* Hero Section */}
@@ -221,7 +226,10 @@ const EmergencyPage = () => {
                   </p>
                 </div>
                 
-                <button className="w-full bg-blue-900 hover:bg-blue-800 text-white py-3 rounded-lg font-semibold transition">
+                <button 
+                  onClick={() => handleViewOnMap(hospital.name)}
+                  className="w-full bg-blue-900 hover:bg-blue-800 text-white py-3 rounded-lg font-semibold transition"
+                >
                   View on Map
                 </button>
               </div>

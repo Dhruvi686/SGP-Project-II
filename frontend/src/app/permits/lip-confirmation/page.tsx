@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import jsPDF from 'jspdf';
 
 export default function ILPConfirmation() {
   const router = useRouter();
@@ -20,15 +21,187 @@ export default function ILPConfirmation() {
   }, [router]);
 
   const handleDownloadPDF = () => {
-    // Simulate PDF download
-    const element = document.createElement('a');
-    const file = new Blob(['PDF content would be here'], { type: 'application/pdf' });
-    element.href = URL.createObjectURL(file);
-    element.download = `ILP-Application-${applicationData?.applicationId}.pdf`;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    
+    // ============ HEADER SECTION ============
+    // Top header band (government style)
+    doc.setFillColor(25, 47, 89); // Dark blue government color
+    doc.rect(0, 0, pageWidth, 35, 'F');
+    
+    // Government emblem/logo placeholder (left side)
+    doc.setDrawColor(255, 255, 255);
+    doc.setLineWidth(1);
+    doc.circle(25, 17.5, 10, 'S'); // Placeholder circle for emblem
+    doc.setFontSize(8);
+    doc.setTextColor(255, 255, 255);
+    doc.text('EMBLEM', 25, 19, { align: 'center' });
+    
+    // Header text (center)
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text('GOVERNMENT OF LADAKH', pageWidth / 2, 12, { align: 'center' });
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Department of Tourism', pageWidth / 2, 18, { align: 'center' });
+    doc.setFontSize(8);
+    doc.text('Union Territory of Ladakh, India', pageWidth / 2, 24, { align: 'center' });
+    
+    // Reset colors
+    doc.setTextColor(0, 0, 0);
+    
+    // ============ DOCUMENT TITLE ============
+    doc.setFontSize(18);
+    doc.setFont('times', 'bold');
+    doc.text('INNER LINE PERMIT (ILP)', pageWidth / 2, 48, { align: 'center' });
+    
+    // Permit number and issue date
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    const permitNumber = `LAK/ILP/${new Date().getFullYear()}/${applicationData?.applicationId?.slice(-6) || '000000'}`;
+    doc.text(`Permit No: ${permitNumber}`, 20, 58);
+    doc.text(`Issue Date: ${new Date().toLocaleDateString('en-GB')}`, pageWidth - 70, 58);
+    
+    // Horizontal line separator
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.5);
+    doc.line(20, 62, pageWidth - 20, 62);
+    
+    // ============ APPLICANT DETAILS (TABLE FORMAT) ============
+    let yPos = 72;
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('APPLICANT DETAILS', 20, yPos);
+    yPos += 8;
+    
+    // Draw table borders
+    doc.setDrawColor(100, 100, 100);
+    doc.setLineWidth(0.3);
+    const tableX = 20;
+    const tableWidth = pageWidth - 40;
+    const colWidth = tableWidth / 2;
+    
+    // Function to draw a table row
+    const drawRow = (label: string, value: string, y: number) => {
+      // Outer border
+      doc.rect(tableX, y, tableWidth, 10);
+      // Vertical divider
+      doc.line(tableX + colWidth, y, tableX + colWidth, y + 10);
+      
+      // Label
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text(label, tableX + 3, y + 6.5);
+      
+      // Value
+      doc.setFont('helvetica', 'normal');
+      doc.text(value, tableX + colWidth + 3, y + 6.5);
+      
+      return y + 10;
+    };
+    
+    if (applicationData && applicationData.formData) {
+      yPos = drawRow('Full Name', applicationData.formData.fullName || 'N/A', yPos);
+      yPos = drawRow('Email Address', applicationData.formData.email || 'N/A', yPos);
+      yPos = drawRow('Phone Number', applicationData.formData.phone || 'N/A', yPos);
+      yPos = drawRow('Travel Start Date', applicationData.formData.travelDate || 'N/A', yPos);
+      yPos = drawRow('Travel End Date', applicationData.formData.returnDate || 'N/A', yPos);
+      yPos = drawRow('Application ID', applicationData?.applicationId || 'N/A', yPos);
+    }
+    
+    yPos += 10;
+    
+    // ============ VALIDITY & STATUS ============
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PERMIT STATUS', 20, yPos);
+    yPos += 8;
+    
+    doc.setFillColor(255, 243, 205); // Light yellow background
+    doc.rect(20, yPos, tableWidth, 15, 'F');
+    doc.setDrawColor(200, 150, 0);
+    doc.rect(20, yPos, tableWidth, 15, 'S');
+    
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(200, 100, 0);
+    doc.text('Status: PENDING APPROVAL', pageWidth / 2, yPos + 6, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('Processing Time: 24-48 hours | You will be notified via email', pageWidth / 2, yPos + 11, { align: 'center' });
+    
+    doc.setTextColor(0, 0, 0);
+    yPos += 25;
+    
+    // ============ QR CODE PLACEHOLDER ============
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Verification QR Code', 20, yPos);
+    yPos += 5;
+    
+    // QR code placeholder (you can integrate a real QR library like 'qrcode' later)
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.5);
+    doc.rect(20, yPos, 30, 30, 'S');
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'italic');
+    doc.text('QR Code', 35, yPos + 16, { align: 'center' });
+    
+    // Instructions next to QR
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text('Scan this QR code to verify the authenticity of this permit.', 55, yPos + 8);
+    doc.text(`Verification URL: https://ladakh.gov.in/verify/${permitNumber}`, 55, yPos + 14);
+    doc.text('This permit is valid only when approved by the issuing authority.', 55, yPos + 20);
+    
+    yPos += 40;
+    
+    // ============ SIGNATURE SECTION ============
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ISSUING AUTHORITY', 20, yPos);
+    yPos += 8;
+    
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.3);
+    doc.rect(20, yPos, 80, 30, 'S');
+    
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(9);
+    doc.text('[Signature will appear here upon approval]', 60, yPos + 12, { align: 'center' });
+    doc.line(30, yPos + 20, 90, yPos + 20); // Signature line
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text('Authorized Signatory', 60, yPos + 25, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text('Department of Tourism, Ladakh', 60, yPos + 29, { align: 'center' });
+    
+    // ============ FOOTER ============
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(100, 100, 100);
+    doc.text('This is a system-generated document. For queries, contact: tourism@ladakh.gov.in | +91-1982-252094', pageWidth / 2, pageHeight - 15, { align: 'center' });
+    doc.text('Keep this document with you during your travel in restricted areas.', pageWidth / 2, pageHeight - 10, { align: 'center' });
+    
+    // Watermark
+    doc.setFontSize(60);
+    doc.setTextColor(240, 240, 240);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PENDING', pageWidth / 2, pageHeight / 2, { align: 'center', angle: 45 });
+    
+    // Border around entire page
+    doc.setDrawColor(25, 47, 89);
+    doc.setLineWidth(1);
+    doc.rect(10, 10, pageWidth - 20, pageHeight - 20, 'S');
+    
+    // Save the PDF
+    doc.save(`ILP-Permit-${permitNumber}.pdf`);
   };
+
 
   const handleReturnToDashboard = () => {
     router.push('/permits');

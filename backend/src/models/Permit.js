@@ -1,48 +1,85 @@
 const mongoose = require('mongoose');
 
 const permitSchema = new mongoose.Schema({
-  touristId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+  // Applicant Information
+  fullName: {
+    type: String,
     required: true
   },
-  destination: {
+  email: {
+    type: String,
+    required: true
+  },
+  phone: {
+    type: String,
+    required: true
+  },
+  
+  // Permit Details
+  permitType: {
     type: String,
     required: true,
     enum: [
-      'Pangong Tso',
-      'Nubra Valley',
-      'Tso Moriri',
-      'Khardung La',
-      'Zanskar Valley',
-      'Hemis National Park',
-      'Magnetic Hill',
-      'Lamayuru',
-      'Alchi Monastery',
-      'Changthang Wildlife Sanctuary'
+      'Inner Line Permit (ILP)',
+      'Protected Area Permit (PAP)',
+      'Wildlife Sanctuary Permit',
+      'Trekking Permit'
     ]
   },
-  startDate: {
+  applicationId: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  permitNumber: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  
+  // Travel Information
+  travelDate: {
     type: Date,
     required: true
   },
-  endDate: {
+  returnDate: {
     type: Date,
     required: true
   },
-  reason: {
-    type: String,
+  itinerary: {
+    type: String
+  },
+  
+  // Documents (URLs to uploaded files)
+  idProofUrl: {
+    type: String
+  },
+  passportPhotoUrl: {
+    type: String
+  },
+  
+  // Payment Information
+  amount: {
+    type: Number,
     required: true
   },
-  documentUrl: {
+  paymentStatus: {
     type: String,
-    required: true
-  },
-  status: {
-    type: String,
-    enum: ['Pending', 'Approved', 'Rejected'],
+    enum: ['Pending', 'Completed', 'Failed'],
     default: 'Pending'
   },
+  paymentSessionId: {
+    type: String
+  },
+  
+  // Status
+  status: {
+    type: String,
+    enum: ['Payment Pending', 'Under Review', 'Approved', 'Rejected'],
+    default: 'Payment Pending'
+  },
+  
+  // Timestamps
   submittedAt: {
     type: Date,
     default: Date.now
@@ -50,9 +87,20 @@ const permitSchema = new mongoose.Schema({
   reviewedAt: {
     type: Date
   },
+  approvedAt: {
+    type: Date
+  },
+  
+  // Admin/Government notes
   reviewerNotes: {
     type: String
+  },
+  
+  // Optional: Link to user if they're logged in
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
   }
-});
+}, { timestamps: true });
 
 module.exports = mongoose.model('Permit', permitSchema);
