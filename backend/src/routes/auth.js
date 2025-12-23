@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
+const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User');
 
 // POST /api/auth/register
@@ -77,6 +79,107 @@ router.post('/register', async (req, res) => {
       success: false,
       message: 'Unexpected error occurred',
       error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+    });
+  }
+});
+
+// POST /api/auth/google
+// Expects: { idToken: string, role?: "Tourist"|"Vendor"|"Government" }
+router.post('/google', async (req, res) => {
+  try {
+    const { idToken, role } = req.body;
+
+    if (!idToken) {
+      return res.status(400).json({ success: false, message: 'idToken is required' });
+    }
+
+    if (!process.env.GOOGLE_CLIENT_ID) {
+      return res.status(500).json({
+        success: false,
+        message: 'Server misconfigured: GOOGLE_CLIENT_ID is not set'
+      });
+    }
+
+    // Helpful debug (non-sensitive): read aud/iss from the JWT payload.
+    // This makes it obvious when the backend is using the wrong GOOGLE_CLIENT_ID.
+    let tokenAud;
+    let tokenIss;
+    try {
+      const parts = String(idToken).split('.');
+      if (parts.length === 3) {
+        const payloadJson = Buffer.from(parts[1], 'base64').toString('utf8');
+        const payload = JSON.parse(payloadJson);
+        tokenAud = payload?.aud;
+        tokenIss = payload?.iss;
+      }
+    } catch {}
+
+    const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    const email = payload?.email;
+    const name = payload?.name || payload?.given_name || 'Google User';
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Google token did not contain an email' });
+    }
+
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      // Create a random password (hashed by pre-save hook). Users can later add/change password in a profile flow.
+      const randomPassword = crypto.randomBytes(32).toString('hex');
+
+      user = new User({
+        email,
+        name,
+        password: randomPassword,
+        role: role || 'Tourist',
+        isEmailVerified: true,
+      });
+
+      await user.save();
+    }
+
+    return res.json({
+      success: true,
+      message: 'Google authentication successful',
+      token: 'fake-jwt-token',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      }
+    });
+  } catch (err) {
+    console.error('Google auth error:', err);
+
+    // Try to extract audience from the token even when verification fails.
+    let tokenAud;
+    let tokenIss;
+    try {
+      const parts = String(req.body?.idToken || '').split('.');
+      if (parts.length === 3) {
+        const payloadJson = Buffer.from(parts[1], 'base64').toString('utf8');
+        const payload = JSON.parse(payloadJson);
+        tokenAud = payload?.aud;
+        tokenIss = payload?.iss;
+      }
+    } catch {}
+
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid Google token',
+      error: process.env.NODE_ENV === 'development' ? (err?.message || String(err)) : 'Unauthorized',
+      expectedAudience: process.env.GOOGLE_CLIENT_ID,
+      tokenAudience: tokenAud,
+      tokenIssuer: tokenIss,
     });
   }
 });

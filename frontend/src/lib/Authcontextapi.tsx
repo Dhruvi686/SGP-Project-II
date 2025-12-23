@@ -200,19 +200,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       return data;
     } catch (error: any) {
-      console.error('Registration error:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
+      const errorObj = error as {
+        message?: string;
+        response?: {
+          data?: any;
+          status?: number;
+        };
+        config?: {
+          url?: string;
+          method?: string;
+          data?: any;
+        };
+      };
+
+      const errorDetails = {
+        message: errorObj?.message || 'Unknown error',
+        response: {
+          data: errorObj?.response?.data,
+          status: errorObj?.response?.status
+        },
         config: {
-          url: error.config?.url,
-          method: error.config?.method,
-          data: error.config?.data
+          url: errorObj?.config?.url,
+          method: errorObj?.config?.method,
+          data: errorObj?.config?.data
         }
-      });
+      };
+
+      console.error('Registration error details:', JSON.stringify(errorDetails, null, 2));
       
-      // Rethrow the error to be handled by the component
-      throw error;
+      // Create a new error with the details
+      const enhancedError = new Error(errorDetails.message) as any;
+      enhancedError.details = errorDetails;
+      throw enhancedError;
     }
   }, [persist]);
 

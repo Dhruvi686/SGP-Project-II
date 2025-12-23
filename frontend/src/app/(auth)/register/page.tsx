@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { signIn } from "next-auth/react";
 import { useAuth } from "@/lib/Authcontextapi";
 
 // Define the API error type
@@ -67,19 +68,6 @@ export default function RegisterPage() {
     }
 
     try {
-      console.log('Starting registration process...');
-      console.log('Registering user with data:', {
-        name: formData.name,
-        email: formData.email,
-        password: formData.password,
-        role: selectedAccountType,
-        ...(selectedAccountType === "Vendor" && {
-          businessName: formData.businessName,
-          contactNumber: formData.contactNumber,
-          address: formData.address
-        })
-      });
-      
       const response = await register(
         formData.name,
         formData.email,
@@ -91,7 +79,6 @@ export default function RegisterPage() {
           address: formData.address
         } : undefined
       );
-      console.log('Registration successful:', response);
       
       showPopup("Registration successful! Redirecting to login...", "success");
       
@@ -216,6 +203,39 @@ export default function RegisterPage() {
           className={`w-full bg-blue-700 text-white py-2 rounded-lg font-semibold hover:bg-blue-800 transition-colors ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
         >
           {isLoading ? 'Registering...' : 'Register'}
+        </button>
+
+        {/* Divider */}
+        <div className="flex items-center gap-3">
+          <div className="h-px flex-1 bg-gray-300" />
+          <span className="text-xs text-gray-500">OR</span>
+          <div className="h-px flex-1 bg-gray-300" />
+        </div>
+
+        {/* Continue with Google */}
+        <button
+          type="button"
+          disabled={isLoading}
+          onClick={() => {
+            try {
+              if (typeof window !== "undefined") {
+                // Use cookie so the server can access the role during the OAuth callback
+                document.cookie = `signup_role=${selectedAccountType}; path=/; max-age=300; SameSite=Lax`;
+              }
+            } catch {}
+
+            signIn("google", { callbackUrl: "/auth/google/callback" });
+          }}
+          className="w-full h-10 border-2 border-gray-300 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors"
+        >
+          <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.69 1.22 9.18 3.6l6.84-6.84C35.84 2.44 30.28 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.95 6.18C12.42 13.38 17.74 9.5 24 9.5z" />
+            <path fill="#4285F4" d="M46.5 24.5c0-1.68-.15-3.29-.43-4.84H24v9.16h12.68c-.55 2.96-2.2 5.47-4.67 7.16l7.16 5.56C43.53 37.5 46.5 31.5 46.5 24.5z" />
+            <path fill="#FBBC05" d="M10.51 28.9A14.96 14.96 0 0 1 9.5 24c0-1.7.29-3.35.81-4.9l-7.95-6.18A23.94 23.94 0 0 0 0 24c0 3.87.92 7.53 2.56 10.78l7.95-5.88z" />
+            <path fill="#34A853" d="M24 48c6.48 0 11.92-2.14 15.9-5.82l-7.16-5.56c-2 1.35-4.56 2.14-8.74 2.14-6.26 0-11.58-3.88-13.49-9.36l-7.95 5.88C6.51 42.62 14.62 48 24 48z" />
+            <path fill="none" d="M0 0h48v48H0z" />
+          </svg>
+          Continue with Google
         </button>
 
         <p className="text-center text-base mt-4">

@@ -1,17 +1,15 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
-import { useAuth } from "@/lib/Authcontextapi";
-import { signIn } from "next-auth/react";
+import { useState, useEffect } from "react";
+import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useState, useEffect } from "react";
 
 export default function TouristLogin() {
   const router = useRouter();
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const { login } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const footer = document.querySelector('footer');
@@ -33,42 +31,30 @@ export default function TouristLogin() {
     };
   }, [dropdownOpen]);
 
-  const mutation = useMutation({
-    mutationFn: ({ email, password }: { email: string; password: string }) => 
-      login(email, password),
-    onSuccess: (data) => {
-      console.log('Login successful, user data:', data);
-      alert("Tourist Login successful!");
-      router.push("/dashboard");
-    },
-    onError: (error: any) => {
-      console.error("Login mutation error:", error);
-      
-      // Extract the most relevant error message
-      let errorMessage = 'Login failed. Please check your credentials and try again.';
-      
-      if (error.details) {
-        // Use the enhanced error details if available
-        const details = error.details;
-        console.error('Error details:', details);
-        
-        if (details.response?.status === 401) {
-          errorMessage = 'Invalid email or password. Please try again.';
-        } else if (details.response?.data?.message) {
-          errorMessage = details.response.data.message;
-        } else if (details.message) {
-          errorMessage = details.message;
-        }
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      alert(errorMessage);
-    },
-  });
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
 
-  const handleLogin = () => {
-    mutation.mutate(formData);
+    try {
+      const result = await signIn("credentials", {
+        email: formData.email,
+        password: formData.password,
+        redirect: false,  // Prevent automatic redirect
+      });
+
+      if (result?.ok) {
+        // Refresh session and redirect
+        await getSession();  // Ensure session is updated
+        router.push("/dashboard");  // Or your post-login page
+      } else {
+        alert("Login failed: " + result?.error);
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      alert("An error occurred during login.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -98,7 +84,7 @@ export default function TouristLogin() {
             <div className="text-5xl font-bold text-blue-900">Welcome</div>
           </div>
           <p className="mb-8 text-gray-600 text-lg">Login with Email</p>
-          <form className="space-y-6">
+          <form className="space-y-6" onSubmit={handleLogin}>
             <div className="mb-6">
               <label className="block text-sm font-semibold text-gray-700 mb-1">Email id</label>
               <div className="flex items-center border-2 border-gray-300 rounded-lg px-3">
@@ -112,6 +98,7 @@ export default function TouristLogin() {
                   value={formData.email}
                   onChange={e => setFormData({ ...formData, email: e.target.value })}
                   className="w-full h-10 outline-none bg-transparent text-base"
+                  required
                 />
               </div>
             </div>
@@ -129,6 +116,7 @@ export default function TouristLogin() {
                   value={formData.password}
                   onChange={e => setFormData({ ...formData, password: e.target.value })}
                   className="w-full h-10 outline-none bg-transparent text-base"
+                  required
                 />
               </div>
             </div>
@@ -136,11 +124,11 @@ export default function TouristLogin() {
               <a href="#" className="text-blue-600 hover:text-blue-800 text-sm font-medium">Forgot password?</a>
             </div>
             <button 
-              type="button"
-              onClick={handleLogin}
+              type="submit"
+              disabled={isLoading}
               className="w-full h-12 bg-blue-900 text-white text-lg font-semibold rounded-lg hover:bg-blue-800 transition-colors shadow-md hover:shadow-lg cursor-pointer"
             >
-              LOGIN
+              {isLoading ? "Logging in..." : "LOGIN"}
             </button>
             <p className="text-center text-base mt-6">
               Don't have an account? <Link href="/register" className="font-semibold hover:underline cursor-pointer" style={{ color: '#FF9900' }}>Register Now</Link>
