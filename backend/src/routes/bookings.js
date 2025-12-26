@@ -171,10 +171,22 @@ Ladakh Tourism Team`,
   }
 });
 
-// GET /api/bookings - list bookings (basic)
+// GET /api/bookings - list bookings (optionally filtered by email)
 router.get('/', async (req, res) => {
   try {
-    const list = await Booking.find().sort({ createdAt: -1 }).limit(200);
+    const { email } = req.query;
+    let query = {};
+
+    if (email) {
+      // Case-insensitive email search
+      query.email = new RegExp(`^${email}$`, 'i');
+      console.log('Filtering bookings by email (case-insensitive):', email);
+    } else {
+      console.log('No email filter provided, returning all bookings');
+    }
+
+    const list = await Booking.find(query).sort({ createdAt: -1 }).limit(200);
+    console.log(`Found ${list.length} bookings for query:`, query);
     res.json({ bookings: list });
   } catch (err) {
     console.error('List bookings error:', err);

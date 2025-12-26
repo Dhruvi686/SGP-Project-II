@@ -82,25 +82,6 @@ export default function TripPlanner() {
          </div>
        </section>
 
-      {/* Search Bar */}
-      <div className="bg-blue-600 py-3 px-4">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-3">
-            <div className="w-full md:w-1/3">
-              <input 
-                type="text" 
-                placeholder="Search..." 
-                className="w-full px-4 py-2 rounded border-none focus:outline-none"
-              />
-            </div>
-            <div className="flex gap-4">
-              <button className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded">Destinations</button>
-              <button className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded">Activities</button>
-              <button className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded">Packages</button>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Trip Planning Form */}
       <section className="max-w-6xl mx-auto py-8 px-4">

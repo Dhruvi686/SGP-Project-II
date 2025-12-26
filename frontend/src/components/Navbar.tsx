@@ -166,7 +166,7 @@ export default function Navbar() {
                   )}
                 </div>
                 <Button variant="default" asChild>
-                  <Link href="/register">Register</Link>
+                  <Link href="/auth/register">Register</Link>
                 </Button>
               </>
             )}

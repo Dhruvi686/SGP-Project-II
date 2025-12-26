@@ -21,7 +21,7 @@ export default function GoogleAuthCallbackPage() {
     const run = async () => {
       if (status === "loading") return;
       if (status === "unauthenticated") {
-        router.replace("/register");
+        router.replace("/auth/register");
         return;
       }
 

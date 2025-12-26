@@ -1,345 +1,338 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import OtpInput from '@/components/OtpInput';
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useState, useEffect } from "react";
+import { signIn } from "next-auth/react";
+import { useAuth } from "@/lib/Authcontextapi";
+
+// Define the API error type
+type ApiError = {
+  status?: number;
+  data?: {
+    message?: string;
+  };
+  error?: {
+    message?: string;
+  };
+  message?: string;
+};
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [step, setStep] = useState<'email' | 'otp' | 'register'>('email');
-  const [email, setEmail] = useState('');
-  const [otp, setOtp] = useState('');
+  const { register } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
+  const [popup, setPopup] = useState({ show: false, message: "", type: "" });
   const [formData, setFormData] = useState({
-    name: '',
-    password: '',
-    confirmPassword: '',
-    role: 'Tourist',
+    name: "",
+    email: "",
+    contactNumber: "",
+    password: "",
+    businessName: "",
+    address: ""
   });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [popup, setPopup] = useState({ show: false, message: '', type: 'info' });
+  const [selectedAccountType, setSelectedAccountType] = useState("Tourist");
 
-  const handleSendOtp = async (e: React.FormEvent) => {
+  // Hide footer on register page
+  useEffect(() => {
+    const footer = document.querySelector("footer");
+    if (footer) footer.style.display = "none";
+    return () => {
+      if (footer) footer.style.display = "";
+    };
+  }, []);
+
+  const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
+    setIsLoading(true);
 
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/send-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to send OTP');
-      }
-
-      setStep('otp');
-    } catch (err: any) {
-      setError(err.message || 'Something went wrong');
-      setPopup({
-        show: true,
-        message: err.message || 'Failed to send OTP',
-        type: 'error'
-      });
-    } finally {
-      setLoading(false);
+    // Validation
+    if (!formData.name) {
+      setIsLoading(false);
+      return showPopup("Please enter your name.", "error");
     }
-  };
-
-  const handleVerifyOtp = async (enteredOtp: string) => {
-    setOtp(enteredOtp);
-    setLoading(true);
-    setError('');
-
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/verify-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp: enteredOtp }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Invalid OTP');
-      }
-
-      setStep('register');
-    } catch (err: any) {
-      setError(err.message || 'Failed to verify OTP');
-      setPopup({
-        show: true,
-        message: err.message || 'Failed to verify OTP',
-        type: 'error'
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
     
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      setPopup({
-        show: true,
-        message: 'Passwords do not match',
-        type: 'error'
-      });
-      return;
+    if (!formData.email) {
+      setIsLoading(false);
+      return showPopup("Please enter your email.", "error");
+    }
+    
+    if (!formData.password) {
+      setIsLoading(false);
+      return showPopup("Please enter a password.", "error");
     }
 
-    setLoading(true);
-    setError('');
+    if (selectedAccountType === "Vendor" && (!formData.businessName || !formData.address)) {
+      setIsLoading(false);
+      return showPopup("Business name and address are required for vendors.", "error");
+    }
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          otp,
-          ...formData,
-        }),
-      });
-
-      let responseData;
-      try {
-        const text = await response.text();
-        responseData = text ? JSON.parse(text) : {};
-      } catch (jsonError) {
-        console.error('Failed to parse JSON response:', jsonError);
-        throw new Error('Invalid response from server');
-      }
+      const response = await register(
+        formData.name,
+        formData.email,
+        formData.password,
+        selectedAccountType,
+        selectedAccountType === "Vendor" ? {
+          businessName: formData.businessName,
+          contactNumber: formData.contactNumber,
+          address: formData.address
+        } : undefined
+      );
       
-      if (!response.ok) {
-        const errorMessage = responseData?.message || 
-                           responseData?.error?.message || 
-                           responseData?.error ||
-                           `Registration failed with status: ${response.status}`;
-        throw new Error(errorMessage);
-      }
-
-      setPopup({
-        show: true,
-        message: 'Registration successful! Redirecting to login...',
-        type: 'success'
-      });
+      showPopup("Registration successful! Redirecting to login...", "success");
       
+      // Redirect to login after 2 seconds
       setTimeout(() => {
-        router.push('/auth/login');
-      }, 1500);
-      
-    } catch (err: any) {
-      console.error('Registration error:', {
-        error: err,
-        message: err?.message,
-        name: err?.name,
-        stack: err?.stack
-      });
-      
-      const errorMessage = err?.message || 'Registration failed. Please try again.';
-      setError(errorMessage);
-      setPopup({
-        show: true,
-        message: errorMessage,
-        type: 'error'
-      });
+        router.push(`/login/${selectedAccountType.toLowerCase()}`);
+      }, 2000);
+    } catch (error: unknown) {
+      console.error('Registration error:', error);
+      const apiError = error as ApiError;
+      const errorMessage = apiError?.data?.message || 
+                         apiError?.error?.message || 
+                         apiError?.message || 
+                         'Registration failed. Please try again.';
+      showPopup(errorMessage, 'error');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  // Remove any existing footer from the layout
-  if (typeof document !== 'undefined') {
-    const footer = document.querySelector('footer');
-    if (footer) {
-      footer.style.display = 'none';
-    }
-  }
+  const showPopup = (message: string, type: string) => {
+    setPopup({ show: true, message, type });
+    setTimeout(() => setPopup({ show: false, message: "", type: "" }), 3000);
+  };
 
-  // Render the appropriate step
-  if (step === 'email') {
+  // Render the registration form
+  const renderForm = () => {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8">
-          <div>
-            <h2 className="text-center text-3xl font-extrabold text-gray-900">
-              Create your account
-            </h2>
-            <p className="mt-2 text-center text-sm text-gray-600">
-              We'll send a verification code to your email
-            </p>
-          </div>
-          {popup.show && (
-            <div className={`p-4 rounded-md ${
-              popup.type === 'error' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
-            }`}>
-              {popup.message}
-            </div>
-          )}
-          <form className="mt-8 space-y-6" onSubmit={handleSendOtp}>
-            <div className="rounded-md shadow-sm -space-y-px">
-              <div>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="appearance-none relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                  placeholder="Email address"
-                />
-              </div>
-            </div>
+      <form onSubmit={handleRegister} className="space-y-4">
+        {/* Name */}
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1">
+            Full Name
+          </label>
+          <input
+            type="text"
+            placeholder="John Doe"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            className="w-full h-10 outline-none border-2 border-gray-300 rounded-lg px-3"
+          />
+        </div>
+
+        {/* Email */}
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1">
+            Email
+          </label>
+          <input
+            type="email"
+            placeholder="example@gmail.com"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            className="w-full h-10 outline-none border-2 border-gray-300 rounded-lg px-3"
+          />
+        </div>
+
+        {/* Password */}
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1">
+            Password
+          </label>
+          <input
+            type="password"
+            placeholder="Password"
+            value={formData.password}
+            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+            className="w-full h-10 outline-none border-2 border-gray-300 rounded-lg px-3"
+          />
+        </div>
+
+        {/* Vendor Fields */}
+        {selectedAccountType === "Vendor" && (
+          <>
             <div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 h-10"
-              >
-                {loading ? 'Sending...' : 'Send Verification Code'}
-              </button>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Business Name
+              </label>
+              <input
+                type="text"
+                placeholder="My Travel Co."
+                value={formData.businessName}
+                onChange={(e) =>
+                  setFormData({ ...formData, businessName: e.target.value })
+                }
+                className="w-full h-10 outline-none border-2 border-gray-300 rounded-lg px-3"
+              />
             </div>
-          </form>
-          <div className="text-center text-sm">
-            <Link href="/auth/login" className="font-medium text-blue-600 hover:text-blue-500">
-              Already have an account? Sign in
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
-  if (step === 'otp') {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8">
-          <div>
-            <h2 className="text-center text-3xl font-extrabold text-gray-900">
-              Verify your email
-            </h2>
-            <p className="mt-2 text-center text-sm text-gray-600">
-              We've sent a 6-digit code to {email}
-            </p>
-          </div>
-          {popup.show && (
-            <div className={`p-4 rounded-md ${
-              popup.type === 'error' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
-            }`}>
-              {popup.message}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Contact Number
+              </label>
+              <input
+                type="tel"
+                placeholder="9999999999"
+                value={formData.contactNumber}
+                onChange={(e) => setFormData({ ...formData, contactNumber: e.target.value })}
+                className="w-full h-10 outline-none border-2 border-gray-300 rounded-lg px-3"
+              />
             </div>
-          )}
-          <div className="mt-8">
-            <div className="flex justify-center mb-6">
-              <OtpInput onComplete={handleVerifyOtp} />
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Address
+              </label>
+              <input
+                type="text"
+                placeholder="Street, City, State"
+                value={formData.address}
+                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                className="w-full h-10 outline-none border-2 border-gray-300 rounded-lg px-3"
+              />
             </div>
-            <div className="text-center text-sm">
-              <button
-                type="button"
-                onClick={() => setStep('email')}
-                className="font-medium text-blue-600 hover:text-blue-500"
-                disabled={loading}
-              >
-                Change email
-              </button>
-            </div>
-          </div>
+          </>
+        )}
+
+        {/* Submit */}
+        <button
+          type="submit"
+          disabled={isLoading}
+          className={`w-full bg-blue-700 text-white py-2 rounded-lg font-semibold hover:bg-blue-800 transition-colors ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+        >
+          {isLoading ? 'Registering...' : 'Register'}
+        </button>
+
+        {/* Divider */}
+        <div className="flex items-center gap-3">
+          <div className="h-px flex-1 bg-gray-300" />
+          <span className="text-xs text-gray-500">OR</span>
+          <div className="h-px flex-1 bg-gray-300" />
         </div>
-      </div>
+
+        {/* Continue with Google */}
+        <button
+          type="button"
+          disabled={isLoading}
+          onClick={() => {
+            try {
+              if (typeof window !== "undefined") {
+                // Use cookie so the server can access the role during the OAuth callback
+                document.cookie = `signup_role=${selectedAccountType}; path=/; max-age=300; SameSite=Lax`;
+              }
+            } catch {}
+
+            signIn("google", { callbackUrl: "/auth/google/callback" });
+          }}
+          className="w-full h-10 border-2 border-gray-300 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors"
+        >
+          <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.69 1.22 9.18 3.6l6.84-6.84C35.84 2.44 30.28 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.95 6.18C12.42 13.38 17.74 9.5 24 9.5z" />
+            <path fill="#4285F4" d="M46.5 24.5c0-1.68-.15-3.29-.43-4.84H24v9.16h12.68c-.55 2.96-2.2 5.47-4.67 7.16l7.16 5.56C43.53 37.5 46.5 31.5 46.5 24.5z" />
+            <path fill="#FBBC05" d="M10.51 28.9A14.96 14.96 0 0 1 9.5 24c0-1.7.29-3.35.81-4.9l-7.95-6.18A23.94 23.94 0 0 0 0 24c0 3.87.92 7.53 2.56 10.78l7.95-5.88z" />
+            <path fill="#34A853" d="M24 48c6.48 0 11.92-2.14 15.9-5.82l-7.16-5.56c-2 1.35-4.56 2.14-8.74 2.14-6.26 0-11.58-3.88-13.49-9.36l-7.95 5.88C6.51 42.62 14.62 48 24 48z" />
+            <path fill="none" d="M0 0h48v48H0z" />
+          </svg>
+          Continue with Google
+        </button>
+
+        <p className="text-center text-base mt-4">
+          Already have an account?{" "}
+          <Link href="/login" className="font-semibold hover:underline text-blue-700 cursor-pointer">
+            Login
+          </Link>
+        </p>
+      </form>
     );
-  }
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="text-center text-3xl font-extrabold text-gray-900">
-            Complete your profile
-          </h2>
+    <div className="min-h-screen flex items-center justify-center bg-cover bg-center relative" style={{ backgroundImage: "url('/ladakh-hero.jpeg')" }}>
+      <div className="absolute inset-0 backdrop-blur-[2px] bg-black/20"></div>
+
+      <div className="bg-white bg-opacity-90 rounded-xl shadow-lg flex w-full max-w-5xl overflow-hidden relative z-10 mt-[1in]">
+        {/* Left Side */}
+        <div
+          className="relative w-1/2 hidden md:flex flex-col justify-center items-center"
+          style={{
+            backgroundImage: "url('/ladakh-bridge2.jpg')",
+            backgroundSize: "cover",
+            backgroundPosition: "center"
+          }}
+        >
+          <div className="absolute inset-0 bg-black opacity-50"></div>
+          <div className="relative z-10 text-center text-white px-8">
+            <h2 className="text-4xl font-bold mb-4">Julley Ladakh!</h2>
+            <p className="text-lg">
+              Travel is the only purchase that enriches you in ways beyond material wealth
+            </p>
+          </div>
         </div>
-        {popup.show && (
-          <div className={`p-4 rounded-md ${
-            popup.type === 'error' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
-          }`}>
-            {popup.message}
-          </div>
-        )}
-        <form className="mt-8 space-y-6" onSubmit={handleRegister}>
-          <div className="rounded-md shadow-sm space-y-4">
-            <div>
-              <input
-                id="name"
-                name="name"
-                type="text"
-                required
-                value={formData.name}
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
-                className="appearance-none relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Full Name"
-              />
-            </div>
-            <div>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                minLength={6}
-                value={formData.password}
-                onChange={(e) => setFormData({...formData, password: e.target.value})}
-                className="appearance-none relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Password"
-              />
-            </div>
-            <div>
-              <input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                required
-                minLength={6}
-                value={formData.confirmPassword}
-                onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
-                className="appearance-none relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Confirm Password"
-              />
-            </div>
-            <div>
-              <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">
-                I am a
-              </label>
-              <select
-                id="role"
-                name="role"
-                value={formData.role}
-                onChange={(e) => setFormData({...formData, role: e.target.value})}
-                className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border h-10"
-              >
-                <option value="Tourist">Tourist</option>
-                <option value="Vendor">Vendor</option>
-                <option value="Government">Government Official</option>
-              </select>
-            </div>
-          </div>
+
+        {/* Right Side */}
+        <div className="flex-1 flex flex-col justify-between px-8 py-8">
           <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 h-10"
-            >
-              {loading ? 'Creating Account...' : 'Create Account'}
-            </button>
+            <div className="mb-4 text-left">
+              <h2 className="text-3xl font-bold text-blue-900 mb-1">Create Your Account</h2>
+              <p className="text-gray-600 text-sm mb-4">Please choose your account type</p>
+
+              {/* Account Type Buttons */}
+              <div className="flex gap-2 mb-6">
+                {["Tourist", "Vendor", "Government"].map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setSelectedAccountType(type)}
+                    className={`px-4 py-2 rounded font-semibold border-2 text-sm transition-all cursor-pointer
+                      ${
+                        selectedAccountType === type
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-transparent text-blue-600 border-blue-600 hover:bg-blue-600 hover:text-white"
+                      }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Government Block */}
+            {selectedAccountType === "Government" ? (
+              <div className="space-y-4 border-2 border-yellow-200 bg-yellow-50 rounded-lg p-4">
+                <p className="text-yellow-800 text-sm font-semibold">
+                  Government registration is coming soon.
+                </p>
+                <p className="text-yellow-700 text-sm">Please choose another account type for now.</p>
+              </div>
+            ) : (
+              renderForm()
+            )}
           </div>
-        </form>
+        </div>
       </div>
+
+      {/* Popup message */}
+      {popup.show && (
+        <div
+          style={{
+            position: "fixed",
+            top: 30,
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: popup.type === "success" ? "#4ade80" : "#f87171",
+            color: "#fff",
+            padding: "12px 24px",
+            borderRadius: "8px",
+            zIndex: 1000,
+            fontWeight: "bold",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.15)"
+          }}
+        >
+          {popup.message}
+        </div>
+      )}
     </div>
   );
 }

@@ -131,7 +131,7 @@ export default function TouristLogin() {
               {isLoading ? "Logging in..." : "LOGIN"}
             </button>
             <p className="text-center text-base mt-6">
-              Don't have an account? <Link href="/register" className="font-semibold hover:underline cursor-pointer" style={{ color: '#FF9900' }}>Register Now</Link>
+              Don't have an account? <Link href="/auth/register" className="font-semibold hover:underline cursor-pointer" style={{ color: '#FF9900' }}>Register Now</Link>
             </p>
           </form>
           </div>

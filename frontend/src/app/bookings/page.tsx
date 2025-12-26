@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 
 interface Booking {
   _id: string;
@@ -17,30 +19,48 @@ interface Booking {
 }
 
 export default function BookingsPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Helper function to check if a booking is expired
+  const isBookingExpired = (tripDate: string) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time to start of day
+    const bookingDate = new Date(tripDate);
+    bookingDate.setHours(0, 0, 0, 0); // Reset time to start of day
+    return bookingDate < today;
+  };
+
   useEffect(() => {
-    const fetchBookings = async () => {
-      try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/bookings`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch bookings');
-        }
-        const data = await response.json();
-        setBookings(data.bookings || []);
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
+    if (status === "unauthenticated") {
+      router.push("/login");
+      return;
+    }
+
+    if (status === "authenticated" && session?.user?.email) {
+      fetchBookings(session.user.email);
+    }
+  }, [status, session, router]);
+
+  const fetchBookings = async (email: string) => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/bookings?email=${encodeURIComponent(email)}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch bookings');
       }
-    };
+      const data = await response.json();
+      setBookings(data.bookings || []);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchBookings();
-  }, []);
-
-  if (loading) {
+  if (status === "loading" || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -99,49 +119,77 @@ export default function BookingsPage() {
         ) : (
           <div className="bg-white shadow overflow-hidden sm:rounded-md">
             <ul className="divide-y divide-gray-200">
-              {bookings.map((booking) => (
-                <li key={booking._id}>
-                  <div className="px-4 py-4 sm:px-6">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-blue-600 truncate">
-                        Booking #{booking._id.substring(0, 8).toUpperCase()}
-                      </p>
-                      <div className="ml-2 flex-shrink-0 flex">
-                        <p className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          booking.paymentStatus === 'paid' 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {booking.paymentStatus.toUpperCase()}
+              {bookings.map((booking) => {
+                const expired = isBookingExpired(booking.tripDate);
+                return (
+                  <li key={booking._id}>
+                    <div className="px-4 py-4 sm:px-6">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-blue-600 truncate">
+                          Booking #{booking._id.substring(0, 8).toUpperCase()}
                         </p>
+                        <div className="ml-2 flex-shrink-0 flex space-x-2">
+                          {expired && (
+                            <div className="px-2 py-1 bg-purple-100 text-purple-800 text-xs font-semibold rounded-full flex items-center">
+                              <span className="mr-1">🎉</span>
+                              Trip Completed
+                            </div>
+                          )}
+                          <p className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            booking.paymentStatus === 'paid' 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {booking.paymentStatus.toUpperCase()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-2 sm:flex sm:justify-between">
+                        <div className="sm:flex">
+                          <p className="flex items-center text-sm text-gray-500">
+                            {booking.name} • {booking.email}
+                          </p>
+                        </div>
+                        <div className="mt-2 flex items-center text-sm text-gray-500 sm:mt-0">
+                          <p>
+                            {new Date(booking.tripDate).toLocaleDateString()} • {booking.seats} {booking.seats === 1 ? 'person' : 'people'}
+                          </p>
+                        </div>
+                      </div>
+                      {expired && (
+                        <div className="mt-3 p-3 bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg">
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0">
+                              <svg className="h-5 w-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                              </svg>
+                            </div>
+                            <div className="ml-3">
+                              <p className="text-sm font-medium text-purple-800">
+                                🎉 Your trip has been completed! Hope you had an amazing experience in Ladakh!
+                              </p>
+                              <p className="text-xs text-purple-600 mt-1">
+                                Thank you for choosing us. We look forward to serving you again!
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      <div className="mt-2 flex justify-between">
+                        <p className="text-sm text-gray-900">
+                          ₹{booking.amount.toLocaleString()}
+                        </p>
+                        <Link 
+                          href={`/bookings/${booking._id}`}
+                          className="text-sm font-medium text-blue-600 hover:text-blue-500"
+                        >
+                          View details
+                        </Link>
                       </div>
                     </div>
-                    <div className="mt-2 sm:flex sm:justify-between">
-                      <div className="sm:flex">
-                        <p className="flex items-center text-sm text-gray-500">
-                          {booking.name} • {booking.email}
-                        </p>
-                      </div>
-                      <div className="mt-2 flex items-center text-sm text-gray-500 sm:mt-0">
-                        <p>
-                          {new Date(booking.tripDate).toLocaleDateString()} • {booking.seats} {booking.seats === 1 ? 'person' : 'people'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-2 flex justify-between">
-                      <p className="text-sm text-gray-900">
-                        ₹{booking.amount.toLocaleString()}
-                      </p>
-                      <Link 
-                        href={`/bookings/${booking._id}`}
-                        className="text-sm font-medium text-blue-600 hover:text-blue-500"
-                      >
-                        View details
-                      </Link>
-                    </div>
-                  </div>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}
