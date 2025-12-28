@@ -77,7 +77,7 @@ MONGO_URI  -> MongoDB connection string
 Example .env
 
 PORT=5000
-MONGO_URI=mongodb+srv://username:password@cluster0.mongodb.net/dbname
+MONGO_URI=<YOUR_MONGODB_CONNECTION_STRING>
 
 ## 5️⃣ Testing
 ```bash
