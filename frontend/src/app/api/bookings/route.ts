@@ -8,9 +8,10 @@ export async function GET(request: Request) {
     console.log('Frontend API: Received email parameter:', email);
 
     // Fetch bookings from backend, optionally filtered by email
+    const baseBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000").replace(/\/$/, "");
     const backendUrl = email
-      ? `http://localhost:5000/api/bookings?email=${encodeURIComponent(email)}`
-      : "http://localhost:5000/api/bookings";
+      ? `${baseBackendUrl}/api/bookings?email=${encodeURIComponent(email)}`
+      : `${baseBackendUrl}/api/bookings`;
 
     console.log('Frontend API: Calling backend URL:', backendUrl);
 

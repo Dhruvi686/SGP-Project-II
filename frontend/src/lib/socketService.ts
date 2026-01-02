@@ -13,7 +13,7 @@ class SocketService {
     return SocketService.instance;
   }
 
-  public connect(url: string = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001'): void {
+  public connect(url: string = process.env.NEXT_PUBLIC_SOCKET_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000'): void {
     this.socket = io(url);
     
     this.socket.on('connect', () => {

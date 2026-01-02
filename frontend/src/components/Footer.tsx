@@ -92,7 +92,7 @@ export const Footer = () => {
       {/* Bottom bar */}
       <div className="bg-[#0a2a4a] py-4">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4 text-sm">
-          <div className="text-blue-200">2024 Government of Ladakh. All rights reserved.</div>
+          <div className="text-blue-200">2025 Government of Ladakh. All rights reserved.</div>
           <div className="flex items-center gap-6">
             <a href="#" className="text-blue-200 hover:text-white">Privacy Policy</a>
             <a href="#" className="text-blue-200 hover:text-white">Terms of Service</a>

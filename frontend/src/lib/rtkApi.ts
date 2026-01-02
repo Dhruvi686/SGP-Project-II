@@ -13,7 +13,7 @@ export type RegisterPayload = {
 export const baseApi = createApi({
   reducerPath: 'baseApi',
   baseQuery: fetchBaseQuery({
-    baseUrl: 'http://localhost:5000/api',
+    baseUrl: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api',
     prepareHeaders: (headers) => {
       // You can add auth headers here if needed
       const token = localStorage.getItem('token');
